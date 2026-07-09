@@ -58,6 +58,11 @@ input{font-family:inherit;outline:none;border:none}
 .video-area{display:flex;flex-direction:column;background:#000;position:relative;overflow:hidden}
 .video-container{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;overflow:hidden}
 .video-container video{width:100%;height:100%;object-fit:contain;background:#000}
+.video-container iframe{width:100%;height:100%;border:none;background:#000}
+.source-tag{position:absolute;top:12px;right:12px;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;z-index:5;background:rgba(0,0,0,.7);backdrop-filter:blur(8px)}
+.source-tag.youtube{color:#ff0000}
+.source-tag.embed{color:var(--accent2)}
+.source-tag.file{color:var(--success)}
 .video-controls{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-top:1px solid var(--border)}
 .play-btn{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
 .play-btn:hover{background:#6a4ae8}
@@ -192,10 +197,12 @@ input{font-family:inherit;outline:none;border:none}
       <div class="sync-badge host" id="syncBadge"><span class="dot"></span><span id="syncText">Хост</span></div>
       <div class="video-container" id="videoContainer">
         <video id="video" playsinline preload="metadata"></video>
+        <iframe id="videoIframe" class="hidden" allow="autoplay; encrypted-media; fullscreen" allowfullscreen></iframe>
+        <span id="sourceTag" class="source-tag hidden"></span>
         <div class="drop-overlay" id="dropOverlay">Перетягніть відео сюди</div>
       </div>
       <div class="video-url-bar">
-        <input id="videoUrl" type="text" placeholder="URL відео (mp4, webm...) або перетягніть файл">
+        <input id="videoUrl" type="text" placeholder="URL: mp4, YouTube, або посилання на сторінку">
         <label class="btn-file"><input type="file" accept="video/*" style="display:none" id="fileInput">📂 Файл</label>
         <button class="btn-load" id="btnLoadVideo">Завантажити</button>
       </div>
@@ -367,19 +374,35 @@ function handleSync(msg) {
   const v = $('#video');
   switch (msg.type) {
     case 'load':
-      v.src = msg.url;
-      v.load();
+      if (msg.mode === 'native') {
+        loadVideo(msg.url, false);
+      } else {
+        loadVideo(msg.url, false);
+      }
       break;
     case 'play':
-      if (msg.time != null) v.currentTime = msg.time;
-      v.play().catch(() => {});
+      if (currentMode === 'native') {
+        if (msg.time != null) v.currentTime = msg.time;
+        v.play().catch(() => {});
+      } else if (currentMode === 'youtube') {
+        // YouTube API postMessage
+        iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'playVideo', args: [] }), '*');
+      }
       break;
     case 'pause':
-      if (msg.time != null) v.currentTime = msg.time;
-      v.pause();
+      if (currentMode === 'native') {
+        if (msg.time != null) v.currentTime = msg.time;
+        v.pause();
+      } else if (currentMode === 'youtube') {
+        iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'pauseVideo', args: [] }), '*');
+      }
       break;
     case 'seek':
-      if (msg.time != null) v.currentTime = msg.time;
+      if (currentMode === 'native' && msg.time != null) {
+        v.currentTime = msg.time;
+      } else if (currentMode === 'youtube' && msg.time != null) {
+        iframe.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'seekTo', args: [msg.time, true] }), '*');
+      }
       break;
   }
 }
@@ -518,13 +541,71 @@ function onConnected() {
 
 // ===== VIDEO CONTROLS =====
 const video = $('#video');
+const iframe = $('#videoIframe');
+const sourceTag = $('#sourceTag');
 let userDragging = false;
+let currentMode = ''; // 'native' | 'youtube' | 'iframe'
+
+function detectSourceType(url) {
+  if (!url) return null;
+  // YouTube
+  const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
+  if (ytMatch) return { type: 'youtube', id: ytMatch[1] };
+  // Direct video file
+  if (/\.(mp4|webm|ogg|mov)(\?|$)/i.test(url)) return { type: 'native', url };
+  // Everything else = try iframe (hdrezka, etc)
+  return { type: 'iframe', url };
+}
 
 function loadVideo(url, broadcast = true) {
   if (!url) return;
-  video.src = url;
-  video.load();
-  if (broadcast) sendSync({ type: 'load', url });
+  const src = detectSourceType(url);
+
+  if (!src) { toast('Не вдалося визначити тип джерела'); return; }
+
+  // Hide everything first
+  video.classList.add('hidden');
+  iframe.classList.add('hidden');
+  sourceTag.classList.add('hidden');
+  video.src = '';
+  iframe.src = '';
+
+  if (src.type === 'native') {
+    currentMode = 'native';
+    video.classList.remove('hidden');
+    sourceTag.classList.remove('hidden');
+    sourceTag.className = 'source-tag file';
+    sourceTag.textContent = 'MP4';
+    video.src = src.url;
+    video.load();
+    // Show controls
+    $('.video-controls').style.display = 'flex';
+    $('.video-url-bar').style.display = 'flex';
+  } else if (src.type === 'youtube') {
+    currentMode = 'youtube';
+    iframe.classList.remove('hidden');
+    sourceTag.classList.remove('hidden');
+    sourceTag.className = 'source-tag youtube';
+    sourceTag.textContent = 'YouTube';
+    iframe.src = `https://www.youtube.com/embed/${src.id}?enablejsapi=1&rel=0`;
+    // Hide native controls for YouTube
+    $('.video-controls').style.display = 'none';
+    $('.video-url-bar').style.display = 'flex';
+  } else if (src.type === 'iframe') {
+    currentMode = 'iframe';
+    iframe.classList.remove('hidden');
+    sourceTag.classList.remove('hidden');
+    sourceTag.className = 'source-tag embed';
+    sourceTag.textContent = 'Embed';
+    iframe.src = src.url;
+    // Try to load — might fail due to X-Frame-Options
+    iframe.onload = () => { toast('Сторінка завантажена'); };
+    iframe.onerror = () => { toast('Сторінка заблокувала вставку (X-Frame-Options)'); };
+    $('.video-controls').style.display = 'none';
+    $('.video-url-bar').style.display = 'flex';
+  }
+
+  if (broadcast) sendSync({ type: 'load', url, mode: currentMode });
 }
 
 $('#btnLoadVideo').onclick = () => { loadVideo($('#videoUrl').value.trim()); };
@@ -558,6 +639,7 @@ $('#playBtn').onclick = togglePlay;
 video.onclick = togglePlay;
 
 function togglePlay() {
+  if (currentMode !== 'native') return;
   if (video.paused) {
     video.play().catch(() => {});
     sendSync({ type: 'play', time: video.currentTime });
@@ -576,6 +658,7 @@ document.addEventListener('mousemove', e => { if (userDragging) seekFrom(e); });
 document.addEventListener('mouseup', () => { userDragging = false; });
 
 function seekFrom(e) {
+  if (currentMode !== 'native') return;
   const bar = $('#progressBar');
   const rect = bar.getBoundingClientRect();
   let pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -586,7 +669,7 @@ function seekFrom(e) {
 }
 
 video.ontimeupdate = () => {
-  if (!userDragging && video.duration) {
+  if (currentMode === 'native' && !userDragging && video.duration) {
     const pct = (video.currentTime / video.duration) * 100;
     $('#progressFilled').style.width = pct + '%';
     $('#progressThumb').style.left = pct + '%';
