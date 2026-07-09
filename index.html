@@ -243,8 +243,20 @@ const S = {
 const $ = s => document.querySelector(s);
 
 // ===== UTILITY =====
-function encode(obj) { return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
-function decode(str) { return JSON.parse(decodeURIComponent(escape(atob(str.trim())))); }
+function encode(obj) {
+  const json = JSON.stringify(obj);
+  const bytes = new TextEncoder().encode(json);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  return btoa(binary);
+}
+function decode(str) {
+  str = str.trim().replace(/\s+/g, '');
+  const binary = atob(str);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
 function fmt(s) {
   if (!s || !isFinite(s)) return '0:00';
   const m = Math.floor(s / 60), sec = Math.floor(s % 60);
@@ -394,6 +406,15 @@ $('#btnGenOffer').onclick = async () => {
   $('#btnGenOffer').textContent = 'Створено';
   updateSteps(1);
   toast('Код створено! Скопіюйте його другу');
+
+  // Select all text in code block on click
+  $('#offerText').parentElement.onclick = function() {
+    const range = document.createRange();
+    range.selectNodeContents($('#offerText'));
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
 };
 
 // Host: accept answer
@@ -402,11 +423,15 @@ $('#btnAcceptAnswer').onclick = async () => {
   if (!raw) { toast('Вставте код відповіді'); return; }
   try {
     const answer = decode(raw);
+    if (!answer || !answer.type || !answer.sdp) {
+      toast('Невірний формат коду'); return;
+    }
     await S.pc.setRemoteDescription(answer);
     updateSteps(3);
     toast('Відповідь прийнята! З\'єднання встановлюється...');
   } catch (e) {
-    toast('Невірний код відповіді');
+    console.error('Answer decode error:', e);
+    toast('Помилка: ' + e.message);
   }
 };
 
@@ -437,7 +462,8 @@ $('#btnGenAnswer').onclick = async () => {
     updateSteps(2);
     toast('Відповідь створена! Скопіюйте другу');
   } catch (e) {
-    toast('Невірний код пропозиції');
+    console.error('Answer create error:', e);
+    toast('Помилка: ' + e.message);
   }
 };
 
@@ -456,6 +482,20 @@ $('#answerCopyBtn').onclick = () => copyToClipboard($('#answerText').textContent
 
 function copyToClipboard(text, btnId) {
   navigator.clipboard.writeText(text).then(() => {
+    const btn = $(`#${btnId}`);
+    btn.textContent = 'Скопійовано!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Копіювати'; btn.classList.remove('copied'); }, 2000);
+  }).catch(() => {
+    // Fallback: textarea method
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
     const btn = $(`#${btnId}`);
     btn.textContent = 'Скопійовано!';
     btn.classList.add('copied');
