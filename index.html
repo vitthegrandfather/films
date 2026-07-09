@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MovieSync — Дивимося разом</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a0f;--surface:#13131a;--surface2:#1a1a24;--surface3:#22222e;
+  --border:#2a2a3a;--text:#e8e8f0;--text2:#9898a8;--accent:#7c5cfc;
+  --accent2:#a78bfa;--success:#22c55e;--chat-me:#7c5cfc;--chat-them:#2a2a3a;
+  --radius:12px;--radius-sm:8px;
+}
+html,body{height:100%;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+button{font-family:inherit;cursor:pointer;border:none;outline:none}
+input{font-family:inherit;outline:none;border:none}
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+
+/* ===== LANDING ===== */
+#landing{display:flex;align-items:center;justify-content:center;height:100vh;background:radial-gradient(ellipse at 50% 30%,#1a1a2e,var(--bg))}
+.landing-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:48px 40px;width:420px;max-width:92vw;text-align:center;animation:fadeUp .5s ease}
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+.landing-card h1{font-size:28px;font-weight:700;margin-bottom:4px;background:linear-gradient(135deg,var(--accent2),var(--accent));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.landing-card .subtitle{color:var(--text2);font-size:14px;margin-bottom:32px}
+.landing-card .icon{font-size:48px;margin-bottom:16px;display:block}
+.field{margin-bottom:16px;text-align:left}
+.field label{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--text2);margin-bottom:6px}
+.field input{width:100%;padding:12px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:15px;transition:border-color .2s}
+.field input:focus{border-color:var(--accent)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:var(--radius-sm);font-size:15px;font-weight:600;transition:all .2s}
+.btn-primary{background:var(--accent);color:#fff}
+.btn-primary:hover{background:#6a4ae8;transform:translateY(-1px)}
+.btn-outline{background:transparent;color:var(--text);border:1px solid var(--border);margin-top:10px}
+.btn-outline:hover{border-color:var(--accent);color:var(--accent2)}
+.divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--text2);font-size:13px}
+.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border)}
+
+/* ===== SIGNALING ===== */
+#signaling{display:none;height:100vh;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 30%,#1a1a2e,var(--bg))}
+.signal-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:40px;width:540px;max-width:92vw;animation:fadeUp .5s ease}
+.signal-card h2{font-size:20px;margin-bottom:20px}
+.steps{display:flex;gap:8px;margin-bottom:24px}
+.step{flex:1;text-align:center;padding:10px 0;border-radius:var(--radius-sm);font-size:12px;font-weight:600;background:var(--surface2);color:var(--text2);transition:all .3s}
+.step.active{background:var(--accent);color:#fff}
+.step.done{background:var(--success);color:#fff}
+.signal-card p{color:var(--text2);font-size:14px;line-height:1.6;margin-bottom:12px}
+.code-block{position:relative;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-bottom:16px;max-height:140px;overflow-y:auto;font-family:'Courier New',monospace;font-size:11px;word-break:break-all;color:var(--accent2);line-height:1.5;user-select:all}
+.copy-btn{position:absolute;top:8px;right:8px;background:var(--accent);color:#fff;padding:4px 10px;border-radius:4px;font-size:11px;font-weight:600;z-index:1}
+.copy-btn:hover{background:#6a4ae8}
+.copy-btn.copied{background:var(--success)}
+
+/* ===== MAIN APP ===== */
+#app{display:none;height:100vh;overflow:hidden}
+.app-layout{display:grid;grid-template-columns:1fr 340px;grid-template-rows:1fr;height:100vh}
+.video-area{display:flex;flex-direction:column;background:#000;position:relative;overflow:hidden}
+.video-container{flex:1;display:flex;align-items:center;justify-content:center;background:#000;position:relative;overflow:hidden}
+.video-container video{width:100%;height:100%;object-fit:contain;background:#000}
+.video-controls{display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface);border-top:1px solid var(--border)}
+.play-btn{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.play-btn:hover{background:#6a4ae8}
+.progress-bar{flex:1;height:5px;background:var(--surface3);border-radius:3px;cursor:pointer;position:relative}
+.progress-bar .filled{height:100%;background:var(--accent);border-radius:3px;width:0%;transition:width .05s linear}
+.progress-bar .thumb{position:absolute;top:50%;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;background:var(--accent);opacity:0;transition:opacity .15s}
+.progress-bar:hover .thumb{opacity:1}
+.time-label{font-size:12px;color:var(--text2);white-space:nowrap;min-width:90px;text-align:center}
+.volume-group{display:flex;align-items:center;gap:6px}
+.volume-group input[type=range]{width:70px;accent-color:var(--accent)}
+.mic-btn{width:32px;height:32px;border-radius:50%;background:var(--surface3);color:var(--text2);display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .2s;flex-shrink:0}
+.mic-btn:hover{background:var(--surface2);color:var(--text)}
+.mic-btn.active{background:var(--accent);color:#fff}
+
+.video-url-bar{display:flex;gap:8px;padding:8px 16px;background:var(--surface);border-top:1px solid var(--border)}
+.video-url-bar input{flex:1;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px}
+.video-url-bar input:focus{border-color:var(--accent)}
+.btn-load{padding:8px 16px;background:var(--accent);color:#fff;border-radius:6px;font-size:13px;font-weight:600;white-space:nowrap}
+.btn-load:hover{background:#6a4ae8}
+.btn-file{padding:8px 12px;background:var(--surface3);color:var(--text2);border-radius:6px;font-size:13px;white-space:nowrap;cursor:pointer;display:inline-flex;align-items:center}
+.btn-file:hover{background:var(--border);color:var(--text)}
+
+.drop-overlay{position:absolute;inset:0;background:rgba(124,92,252,.15);border:3px dashed var(--accent);display:none;align-items:center;justify-content:center;z-index:10;font-size:18px;font-weight:600;color:var(--accent2)}
+.drop-overlay.show{display:flex}
+
+.sync-badge{position:absolute;top:12px;left:12px;display:flex;align-items:center;gap:6px;padding:6px 12px;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);border-radius:20px;font-size:12px;font-weight:600;z-index:5}
+.sync-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--success);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.sync-badge.host{color:var(--accent2)}
+.sync-badge.follower{color:var(--success)}
+
+/* ===== CHAT PANEL ===== */
+.chat-panel{display:flex;flex-direction:column;background:var(--surface);border-left:1px solid var(--border)}
+.chat-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.chat-header h3{font-size:15px;font-weight:600}
+.chat-header .room-id{font-size:12px;color:var(--text2);background:var(--surface2);padding:3px 8px;border-radius:4px;font-family:monospace}
+.chat-messages{flex:1;overflow-y:auto;padding:12px 16px;display:flex;flex-direction:column;gap:8px}
+.chat-msg{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;word-wrap:break-word;animation:msgIn .2s ease}
+@keyframes msgIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+.chat-msg.me{align-self:flex-end;background:var(--chat-me);color:#fff;border-bottom-right-radius:4px}
+.chat-msg.them{align-self:flex-start;background:var(--chat-them);border-bottom-left-radius:4px}
+.chat-msg.system{align-self:center;background:transparent;color:var(--text2);font-size:12px;padding:4px 0;max-width:100%}
+.chat-msg .sender{font-size:11px;font-weight:600;color:var(--accent2);margin-bottom:2px}
+.chat-msg.me .sender{color:rgba(255,255,255,.7)}
+.chat-input-area{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.chat-input-area input{flex:1;padding:10px 14px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:13px}
+.chat-input-area input:focus{border-color:var(--accent)}
+.btn-send{width:38px;height:38px;border-radius:var(--radius-sm);background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px}
+.btn-send:hover{background:#6a4ae8}
+
+/* ===== TOAST ===== */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:12px 24px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;color:var(--text);z-index:100;animation:toastIn .3s ease;pointer-events:none}
+@keyframes toastIn{from{opacity:0;transform:translateX(-50%) translateY(10px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
+
+.hidden{display:none!important}
+
+@media(max-width:768px){
+  .app-layout{grid-template-columns:1fr;grid-template-rows:1fr 240px}
+  .chat-panel{border-left:none;border-top:1px solid var(--border)}
+}
+</style>
+</head>
+<body>
+
+<!-- LANDING -->
+<div id="landing">
+  <div class="landing-card">
+    <span class="icon">🎬</span>
+    <h1>MovieSync</h1>
+    <p class="subtitle">Дивіться фільми разом, де б ви не були</p>
+    <div class="field">
+      <label>Ваше ім'я</label>
+      <input id="username" type="text" placeholder="Наприклад: Олексій" maxlength="20">
+    </div>
+    <button class="btn btn-primary" id="btnCreate">Створити кімнату</button>
+    <div class="divider">або</div>
+    <button class="btn btn-outline" id="btnJoinShow">Приєднатися до кімнати</button>
+    <div id="joinFields" class="hidden" style="margin-top:16px">
+      <div class="field">
+        <label>Код пропозиції від друга</label>
+        <input id="joinCode" type="text" placeholder="Вставте код пропозиції...">
+      </div>
+      <button class="btn btn-primary" id="btnJoin">Приєднатися</button>
+    </div>
+  </div>
+</div>
+
+<!-- SIGNALING WIZARD -->
+<div id="signaling">
+  <div class="signal-card">
+    <div class="steps">
+      <div class="step active" id="step1">1. Пропозиція</div>
+      <div class="step" id="step2">2. Відповідь</div>
+      <div class="step" id="step3">3. Готово!</div>
+    </div>
+
+    <div id="hostFlow">
+      <p>Крок 1: Натисніть, щоб створити код підключення:</p>
+      <button class="btn btn-primary" id="btnGenOffer" style="width:auto;padding:10px 24px;margin-bottom:16px">Створити код</button>
+      <div id="offerSection" class="hidden">
+        <p>Крок 2: Скопіюйте цей код і відправте другу:</p>
+        <div class="code-block" id="offerCode">
+          <button class="copy-btn" id="offerCopyBtn">Копіювати</button>
+          <span id="offerText"></span>
+        </div>
+        <p style="margin-top:16px">Крок 3: Друг згенерував відповідь — вставте її нижче:</p>
+        <div class="field"><input id="answerInput" placeholder="Вставте код відповіді..."></div>
+        <button class="btn btn-primary" id="btnAcceptAnswer" style="width:auto;padding:10px 24px">Прийняти відповідь</button>
+      </div>
+    </div>
+
+    <div id="followerFlow" class="hidden">
+      <p>Крок 1: Вставте код пропозиції від друга:</p>
+      <div class="field"><input id="offerInput" placeholder="Вставте код пропозиції..."></div>
+      <button class="btn btn-primary" id="btnGenAnswer" style="width:auto;padding:10px 24px;margin-bottom:16px">Згенерувати відповідь</button>
+      <div id="answerSection" class="hidden">
+        <p>Крок 2: Скопіюйте цей код і відправте другу:</p>
+        <div class="code-block" id="answerCode">
+          <button class="copy-btn" id="answerCopyBtn">Копіювати</button>
+          <span id="answerText"></span>
+        </div>
+        <p style="margin-top:12px;color:var(--success)">З'єднання встановлюється...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <div class="app-layout">
+    <div class="video-area">
+      <div class="sync-badge host" id="syncBadge"><span class="dot"></span><span id="syncText">Хост</span></div>
+      <div class="video-container" id="videoContainer">
+        <video id="video" playsinline preload="metadata"></video>
+        <div class="drop-overlay" id="dropOverlay">Перетягніть відео сюди</div>
+      </div>
+      <div class="video-url-bar">
+        <input id="videoUrl" type="text" placeholder="URL відео (mp4, webm...) або перетягніть файл">
+        <label class="btn-file"><input type="file" accept="video/*" style="display:none" id="fileInput">📂 Файл</label>
+        <button class="btn-load" id="btnLoadVideo">Завантажити</button>
+      </div>
+      <div class="video-controls">
+        <button class="play-btn" id="playBtn">▶</button>
+        <div class="progress-bar" id="progressBar">
+          <div class="filled" id="progressFilled"></div>
+          <div class="thumb" id="progressThumb"></div>
+        </div>
+        <span class="time-label" id="timeLabel">0:00 / 0:00</span>
+        <div class="volume-group">
+          <button class="mic-btn" id="micBtn" title="Мікрофон">🎤</button>
+          <button class="play-btn" id="volBtn" style="width:32px;height:32px;font-size:12px;background:var(--surface3)">🔊</button>
+          <input type="range" id="volumeSlider" min="0" max="1" step="0.05" value="1">
+        </div>
+      </div>
+    </div>
+    <div class="chat-panel">
+      <div class="chat-header">
+        <h3>Чат</h3>
+        <span class="room-id" id="roomId"></span>
+      </div>
+      <div class="chat-messages" id="chatMessages"></div>
+      <div class="chat-input-area">
+        <input id="chatInput" type="text" placeholder="Повідомлення..." maxlength="500">
+        <button class="btn-send" id="btnSendChat">➤</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== STATE =====
+const S = {
+  username: '',
+  isHost: false,
+  connected: false,
+  pc: null,
+  syncDC: null,
+  chatDC: null,
+  micStream: null,
+  micActive: false,
+};
+
+const $ = s => document.querySelector(s);
+
+// ===== UTILITY =====
+function encode(obj) { return btoa(unescape(encodeURIComponent(JSON.stringify(obj)))); }
+function decode(str) { return JSON.parse(decodeURIComponent(escape(atob(str.trim())))); }
+function fmt(s) {
+  if (!s || !isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return m + ':' + String(sec).padStart(2, '0');
+}
+function toast(msg) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 3000);
+}
+function escapeHtml(t) {
+  const d = document.createElement('div');
+  d.textContent = t;
+  return d.innerHTML;
+}
+
+// ===== LANDING =====
+$('#btnCreate').onclick = () => {
+  const name = $('#username').value.trim();
+  if (!name) { $('#username').focus(); toast('Введіть ім\'я'); return; }
+  S.username = name;
+  S.isHost = true;
+  $('#landing').style.display = 'none';
+  $('#signaling').style.display = 'flex';
+  $('#hostFlow').classList.remove('hidden');
+  $('#followerFlow').classList.add('hidden');
+};
+
+$('#btnJoinShow').onclick = () => {
+  const name = $('#username').value.trim();
+  if (!name) { $('#username').focus(); toast('Введіть ім\'я'); return; }
+  S.username = name;
+  S.isHost = false;
+  $('#joinFields').classList.toggle('hidden');
+  if (!$('#joinFields').classList.contains('hidden')) $('#joinCode').focus();
+};
+
+$('#btnJoin').onclick = () => {
+  const code = $('#joinCode').value.trim();
+  if (!code) { toast('Вставте код пропозиції'); return; }
+  $('#landing').style.display = 'none';
+  $('#signaling').style.display = 'flex';
+  $('#hostFlow').classList.add('hidden');
+  $('#followerFlow').classList.remove('hidden');
+  $('#offerInput').value = code;
+};
+
+// ===== WEBRTC =====
+function createPC() {
+  const pc = new RTCPeerConnection({
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' }
+    ]
+  });
+  pc.oniceconnectionstatechange = () => {
+    if (pc.iceConnectionState === 'connected') onConnected();
+    if (pc.iceConnectionState === 'disconnected' || pc.iceConnectionState === 'failed') {
+      toast('З\'єднання розірвано');
+    }
+  };
+  return pc;
+}
+
+function waitForICE(pc) {
+  return new Promise(resolve => {
+    if (pc.iceGatheringState === 'complete') return resolve();
+    const check = () => { if (pc.iceGatheringState === 'complete') { pc.onicegatheringstatechange = null; resolve(); } };
+    pc.onicegatheringstatechange = check;
+    setTimeout(resolve, 3000);
+  });
+}
+
+function setupSyncDC(dc) {
+  S.syncDC = dc;
+  dc.onmessage = (e) => {
+    try { handleSync(JSON.parse(e.data)); } catch {}
+  };
+}
+
+function setupChatDC(dc) {
+  S.chatDC = dc;
+  dc.onmessage = (e) => {
+    try {
+      const m = JSON.parse(e.data);
+      if (m.type === 'chat') appendChat(m.sender, m.text, 'them');
+    } catch {}
+  };
+}
+
+function sendSync(msg) {
+  if (S.syncDC && S.syncDC.readyState === 'open') {
+    S.syncDC.send(JSON.stringify(msg));
+  }
+}
+
+function sendChat(text) {
+  if (S.chatDC && S.chatDC.readyState === 'open') {
+    S.chatDC.send(JSON.stringify({ type: 'chat', sender: S.username, text }));
+  }
+  appendChat(S.username, text, 'me');
+}
+
+// ===== SYNC HANDLER =====
+function handleSync(msg) {
+  const v = $('#video');
+  switch (msg.type) {
+    case 'load':
+      v.src = msg.url;
+      v.load();
+      break;
+    case 'play':
+      if (msg.time != null) v.currentTime = msg.time;
+      v.play().catch(() => {});
+      break;
+    case 'pause':
+      if (msg.time != null) v.currentTime = msg.time;
+      v.pause();
+      break;
+    case 'seek':
+      if (msg.time != null) v.currentTime = msg.time;
+      break;
+  }
+}
+
+// ===== SIGNALING FLOWS =====
+// Host: create offer
+$('#btnGenOffer').onclick = async () => {
+  const pc = createPC();
+  S.pc = pc;
+
+  const syncDC = pc.createDataChannel('sync', { ordered: true });
+  setupSyncDC(syncDC);
+  const chatDC = pc.createDataChannel('chat', { ordered: true });
+  setupChatDC(chatDC);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitForICE(pc);
+
+  const encoded = encode(pc.localDescription);
+  $('#offerText').textContent = encoded;
+  $('#offerSection').classList.remove('hidden');
+  $('#btnGenOffer').disabled = true;
+  $('#btnGenOffer').textContent = 'Створено';
+  updateSteps(1);
+  toast('Код створено! Скопіюйте його другу');
+};
+
+// Host: accept answer
+$('#btnAcceptAnswer').onclick = async () => {
+  const raw = $('#answerInput').value.trim();
+  if (!raw) { toast('Вставте код відповіді'); return; }
+  try {
+    const answer = decode(raw);
+    await S.pc.setRemoteDescription(answer);
+    updateSteps(3);
+    toast('Відповідь прийнята! З\'єднання встановлюється...');
+  } catch (e) {
+    toast('Невірний код відповіді');
+  }
+};
+
+// Follower: paste offer, create answer
+$('#btnGenAnswer').onclick = async () => {
+  const raw = $('#offerInput').value.trim();
+  if (!raw) { toast('Вставте код пропозиції'); return; }
+  try {
+    const offer = decode(raw);
+    const pc = createPC();
+    S.pc = pc;
+
+    pc.ondatachannel = (e) => {
+      if (e.channel.label === 'sync') setupSyncDC(e.channel);
+      if (e.channel.label === 'chat') setupChatDC(e.channel);
+    };
+
+    await pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await waitForICE(pc);
+
+    const encoded = encode(pc.localDescription);
+    $('#answerText').textContent = encoded;
+    $('#answerSection').classList.remove('hidden');
+    $('#btnGenAnswer').disabled = true;
+    $('#btnGenAnswer').textContent = 'Створено';
+    updateSteps(2);
+    toast('Відповідь створена! Скопіюйте другу');
+  } catch (e) {
+    toast('Невірний код пропозиції');
+  }
+};
+
+function updateSteps(current) {
+  ['step1', 'step2', 'step3'].forEach((id, i) => {
+    const el = $(`#${id}`);
+    el.classList.remove('active', 'done');
+    if (i + 1 < current) el.classList.add('done');
+    else if (i + 1 === current) el.classList.add('active');
+  });
+}
+
+// ===== COPY BUTTONS =====
+$('#offerCopyBtn').onclick = () => copyToClipboard($('#offerText').textContent, 'offerCopyBtn');
+$('#answerCopyBtn').onclick = () => copyToClipboard($('#answerText').textContent, 'answerCopyBtn');
+
+function copyToClipboard(text, btnId) {
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = $(`#${btnId}`);
+    btn.textContent = 'Скопійовано!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Копіювати'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+
+// ===== CONNECTION ESTABLISHED =====
+function onConnected() {
+  if (S.connected) return;
+  S.connected = true;
+  $('#signaling').style.display = 'none';
+  $('#app').style.display = 'block';
+  const role = S.isHost ? 'host' : 'follower';
+  $('#syncBadge').className = `sync-badge ${role}`;
+  $('#syncText').textContent = S.isHost ? 'Хост' : 'Учасник';
+  appendChat(null, `${S.username} приєднався`, 'system');
+  toast('З\'єднання встановлено!');
+}
+
+// ===== VIDEO CONTROLS =====
+const video = $('#video');
+let userDragging = false;
+
+function loadVideo(url, broadcast = true) {
+  if (!url) return;
+  video.src = url;
+  video.load();
+  if (broadcast) sendSync({ type: 'load', url });
+}
+
+$('#btnLoadVideo').onclick = () => { loadVideo($('#videoUrl').value.trim()); };
+$('#videoUrl').onkeydown = (e) => { if (e.key === 'Enter') loadVideo($('#videoUrl').value.trim()); };
+
+// File input
+$('#fileInput').onchange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const url = URL.createObjectURL(file);
+    loadVideo(url);
+    $('#videoUrl').value = file.name;
+  }
+};
+
+// Drag & drop
+const vc = $('#videoContainer');
+const dropOverlay = $('#dropOverlay');
+['dragenter', 'dragover'].forEach(ev => vc.addEventListener(ev, e => { e.preventDefault(); dropOverlay.classList.add('show'); }));
+['dragleave', 'drop'].forEach(ev => vc.addEventListener(ev, e => { e.preventDefault(); dropOverlay.classList.remove('show'); }));
+vc.addEventListener('drop', e => {
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('video/')) {
+    loadVideo(URL.createObjectURL(file));
+    $('#videoUrl').value = file.name;
+  }
+});
+
+// Play / Pause
+$('#playBtn').onclick = togglePlay;
+video.onclick = togglePlay;
+
+function togglePlay() {
+  if (video.paused) {
+    video.play().catch(() => {});
+    sendSync({ type: 'play', time: video.currentTime });
+  } else {
+    video.pause();
+    sendSync({ type: 'pause', time: video.currentTime });
+  }
+}
+
+video.onplay = () => { $('#playBtn').textContent = '⏸'; };
+video.onpause = () => { $('#playBtn').textContent = '▶'; };
+
+// Progress
+$('#progressBar').addEventListener('mousedown', e => { userDragging = true; seekFrom(e); });
+document.addEventListener('mousemove', e => { if (userDragging) seekFrom(e); });
+document.addEventListener('mouseup', () => { userDragging = false; });
+
+function seekFrom(e) {
+  const bar = $('#progressBar');
+  const rect = bar.getBoundingClientRect();
+  let pct = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  if (video.duration) {
+    video.currentTime = pct * video.duration;
+    sendSync({ type: 'seek', time: video.currentTime });
+  }
+}
+
+video.ontimeupdate = () => {
+  if (!userDragging && video.duration) {
+    const pct = (video.currentTime / video.duration) * 100;
+    $('#progressFilled').style.width = pct + '%';
+    $('#progressThumb').style.left = pct + '%';
+    $('#timeLabel').textContent = fmt(video.currentTime) + ' / ' + fmt(video.duration);
+  }
+};
+
+// Volume
+$('#volumeSlider').oninput = () => { video.volume = $('#volumeSlider').value; updateVolIcon(); };
+$('#volBtn').onclick = () => { video.muted = !video.muted; updateVolIcon(); };
+function updateVolIcon() {
+  $('#volBtn').textContent = video.muted || video.volume === 0 ? '🔇' : video.volume < 0.5 ? '🔉' : '🔊';
+}
+
+// Microphone
+$('#micBtn').onclick = async () => {
+  if (S.micActive) {
+    if (S.micStream) { S.micStream.getTracks().forEach(t => t.stop()); S.micStream = null; }
+    S.micActive = false;
+    $('#micBtn').classList.remove('active');
+    toast('Мікрофон вимкнено');
+  } else {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      S.micStream = stream;
+      S.micActive = true;
+      $('#micBtn').classList.add('active');
+      if (S.pc) {
+        stream.getTracks().forEach(track => S.pc.addTrack(track, stream));
+      }
+      toast('Мікрофон увімкнено');
+    } catch {
+      toast('Не вдалося увімкнути мікрофон');
+    }
+  }
+};
+
+// ===== CHAT =====
+function appendChat(sender, text, who) {
+  const container = $('#chatMessages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${who}`;
+  if (who === 'system') {
+    div.textContent = text;
+  } else {
+    div.innerHTML = `<div class="sender">${escapeHtml(sender)}</div><div>${escapeHtml(text)}</div>`;
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+}
+
+$('#btnSendChat').onclick = sendFromInput;
+$('#chatInput').onkeydown = e => { if (e.key === 'Enter') sendFromInput(); };
+
+function sendFromInput() {
+  const input = $('#chatInput');
+  const text = input.value.trim();
+  if (!text) return;
+  sendChat(text);
+  input.value = '';
+  input.focus();
+}
+</script>
+</body>
+</html>
