@@ -240,6 +240,7 @@ const S = {
   username: '',
   isHost: false,
   connected: false,
+  signalingDone: false,
   pc: null,
   syncDC: null,
   chatDC: null,
@@ -449,6 +450,7 @@ $('#btnAcceptAnswer').onclick = async () => {
     if (!answer || !answer.type || !answer.sdp) {
       toast('Невірний формат коду'); return;
     }
+    S.signalingDone = true;
     await S.pc.setRemoteDescription(answer);
     updateSteps(3);
     toast('Відповідь прийнята! З\'єднання встановлюється...');
@@ -483,6 +485,7 @@ $('#btnGenAnswer').onclick = async () => {
     $('#btnGenAnswer').disabled = true;
     $('#btnGenAnswer').textContent = 'Створено';
     updateSteps(2);
+    S.signalingDone = true;
     toast('Відповідь створена! Скопіюйте другу');
   } catch (e) {
     console.error('Answer create error:', e);
@@ -528,7 +531,7 @@ function copyToClipboard(text, btnId) {
 
 // ===== CONNECTION ESTABLISHED =====
 function onConnected() {
-  if (S.connected) return;
+  if (S.connected || !S.signalingDone) return;
   S.connected = true;
   $('#signaling').style.display = 'none';
   $('#app').style.display = 'block';
