@@ -307,59 +307,56 @@ function initHost() {
 
   S.peer.on('connection', (conn) => {
     console.log('Follower connected:', conn.peer);
-    S.connections[conn.peer] = conn;
-    S.connectionCount++;
-    setupHostConnection(conn);
 
-    // Send current video state to new joiner
-    if (S.currentVideo) {
-      conn.on('open', () => {
-        conn.send(JSON.stringify({ type: 'load', url: S.currentVideo.url, mode: S.currentVideo.mode }));
-        // Send current time for native video
+    conn.on('open', () => {
+      console.log('Connection open with:', conn.peer);
+      S.connections[conn.peer] = conn;
+      S.connectionCount++;
+      updateParticipantCount();
+      onConnected();
+      appendChat(null, `Учасник приєднався`, 'system');
+
+      // Send current video state to new joiner
+      if (S.currentVideo) {
+        safeSend(conn, { type: 'load', url: S.currentVideo.url, mode: S.currentVideo.mode });
         if (S.currentVideo.mode === 'native' && !video.paused) {
           setTimeout(() => {
-            conn.send(JSON.stringify({ type: 'play', time: video.currentTime }));
-          }, 500);
+            safeSend(conn, { type: 'play', time: video.currentTime });
+          }, 300);
         }
-      });
-    }
+      }
 
-    updateParticipantCount();
+      // Setup data handler
+      conn.on('data', (data) => {
+        try {
+          const msg = JSON.parse(data);
+          if (msg.type === 'chat') {
+            appendChat(msg.sender, msg.text, 'them');
+            broadcastAll(data, conn.peer);
+          } else {
+            handleSync(msg);
+            broadcastAll(data, conn.peer);
+          }
+        } catch (e) { console.error('Data parse error:', e); }
+      });
+    });
+
+    conn.on('close', () => {
+      delete S.connections[conn.peer];
+      S.connectionCount--;
+      updateParticipantCount();
+      appendChat(null, 'Учасник відключився', 'system');
+      toast('Учасник відключився');
+    });
+
+    conn.on('error', (err) => {
+      console.error('Conn error:', conn.peer, err);
+    });
   });
 
   S.peer.on('error', (err) => {
     console.error('Peer error:', err);
     toast('Помилка: ' + err.type);
-  });
-}
-
-function setupHostConnection(conn) {
-  conn.on('open', () => {
-    conn.on('data', (data) => {
-      try {
-        const msg = JSON.parse(data);
-        if (msg.type === 'chat') {
-          appendChat(msg.sender, msg.text, 'them');
-          // Broadcast chat to all other peers
-          broadcastExcept(conn, JSON.stringify(msg));
-        } else {
-          // Sync message from follower — apply locally and relay to others
-          handleSync(msg);
-          broadcastExcept(conn, data);
-        }
-      } catch {}
-    });
-
-    onConnected();
-    appendChat(null, `Учасник приєднався (${S.connectionCount})`, 'system');
-  });
-
-  conn.on('close', () => {
-    delete S.connections[conn.peer];
-    S.connectionCount--;
-    updateParticipantCount();
-    appendChat(null, 'Учасник відключився', 'system');
-    toast('Учасник відключився');
   });
 }
 
@@ -368,9 +365,33 @@ function initFollower() {
 
   S.peer.on('open', (id) => {
     console.log('Follower peer ready:', id);
-    const conn = S.peer.connect(S.roomCode, { reliable: true });
+    const conn = S.peer.connect(S.roomCode, { reliable: true, serialization: 'json' });
     S.conn = conn;
-    setupFollowerConnection(conn);
+
+    conn.on('open', () => {
+      console.log('Connected to host');
+      onConnected();
+
+      conn.on('data', (data) => {
+        try {
+          const msg = JSON.parse(data);
+          if (msg.type === 'chat') {
+            appendChat(msg.sender, msg.text, 'them');
+          } else {
+            handleSync(msg);
+          }
+        } catch (e) { console.error('Data parse error:', e); }
+      });
+    });
+
+    conn.on('close', () => {
+      toast('З\'єднання з хостом розірвано');
+    });
+
+    conn.on('error', (err) => {
+      console.error('Connection error:', err);
+      toast('Помилка з\'єднання');
+    });
   });
 
   S.peer.on('error', (err) => {
@@ -379,44 +400,27 @@ function initFollower() {
   });
 }
 
-function setupFollowerConnection(conn) {
-  conn.on('open', () => {
-    conn.on('data', (data) => {
-      try {
-        const msg = JSON.parse(data);
-        if (msg.type === 'chat') {
-          appendChat(msg.sender, msg.text, 'them');
-        } else {
-          handleSync(msg);
-        }
-      } catch {}
-    });
-
-    onConnected();
-  });
-
-  conn.on('close', () => {
-    toast('З\'єднання з хостом розірвано');
-  });
-}
-
-// Host: broadcast to all connected peers
-function broadcastAll(data) {
-  for (const peerId in S.connections) {
-    const conn = S.connections[peerId];
-    if (conn.open) {
-      conn.send(data);
-    }
+// Safe send with retry
+function safeSend(conn, obj) {
+  const data = JSON.stringify(obj);
+  try {
+    if (conn.open) conn.send(data);
+  } catch (e) {
+    console.error('Send failed, retrying...', e);
+    setTimeout(() => {
+      try { if (conn.open) conn.send(data); } catch {}
+    }, 100);
   }
 }
 
-// Host: broadcast to all except one (for chat echo)
-function broadcastExcept(excludeConn, data) {
+// Host: broadcast to all connected peers (optionally excluding one)
+function broadcastAll(data, excludePeer) {
   for (const peerId in S.connections) {
+    if (peerId === excludePeer) continue;
     const conn = S.connections[peerId];
-    if (conn !== excludeConn && conn.open) {
-      conn.send(data);
-    }
+    try {
+      if (conn.open) conn.send(data);
+    } catch (e) { console.error('Broadcast error:', e); }
   }
 }
 
@@ -431,22 +435,18 @@ function updateParticipantCount() {
 
 function sendSync(msg) {
   if (S.isHost) {
-    // Host: broadcast to all followers
     broadcastAll(JSON.stringify(msg));
   } else if (S.conn && S.conn.open) {
-    // Follower: send to host
-    S.conn.send(JSON.stringify(msg));
+    safeSend(S.conn, msg);
   }
 }
 
 function sendChat(text) {
-  const msg = JSON.stringify({ type: 'chat', sender: S.username, text });
+  const msg = { type: 'chat', sender: S.username, text };
   if (S.isHost) {
-    // Host: broadcast to all, no echo needed (handled in setupHostConnection)
-    broadcastAll(msg);
+    broadcastAll(JSON.stringify(msg));
   } else if (S.conn && S.conn.open) {
-    // Follower: send to host (host will broadcast to others)
-    S.conn.send(msg);
+    safeSend(S.conn, msg);
   }
   appendChat(S.username, text, 'me');
 }
