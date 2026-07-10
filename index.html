@@ -343,7 +343,9 @@ function setupHostConnection(conn) {
           // Broadcast chat to all other peers
           broadcastExcept(conn, JSON.stringify(msg));
         } else {
-          // Sync messages from followers are ignored (host controls)
+          // Sync message from follower — apply locally and relay to others
+          handleSync(msg);
+          broadcastExcept(conn, data);
         }
       } catch {}
     });
