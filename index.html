@@ -143,7 +143,7 @@ input{font-family:inherit;outline:none;border:none}
     <div id="joinFields" class="hidden" style="margin-top:16px">
       <div class="field">
         <label>Код кімнати від друга</label>
-        <input id="joinCode" type="text" placeholder="Наприклад: HAPPY-BLUE-TREE" maxlength="20" style="text-transform:uppercase;font-family:monospace;letter-spacing:2px">
+        <input id="joinCode" type="text" placeholder="Наприклад: HAPPYBLUE07" maxlength="20" style="text-transform:uppercase;font-family:monospace;letter-spacing:2px">
       </div>
       <button class="btn btn-primary" id="btnJoin">Приєднатися</button>
     </div>
@@ -234,7 +234,18 @@ function generateRoomCode() {
   const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
   const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
   const num = String(Math.floor(Math.random() * 100)).padStart(2, '0');
-  return `${a}-${n}-${num}`;
+  return a + n + num;
+}
+
+function formatRoomCode(code) {
+  // Format as WORD-WORD-00 for display
+  if (code.length >= 8) {
+    const w1 = code.slice(0, Math.floor(code.length / 2));
+    const w2 = code.slice(Math.floor(code.length / 2), code.length - 2);
+    const num = code.slice(-2);
+    return w1 + '-' + w2 + '-' + num;
+  }
+  return code;
 }
 
 // ===== UTILITY =====
@@ -265,8 +276,8 @@ $('#btnCreate').onclick = () => {
   S.roomCode = generateRoomCode();
   $('#landing').style.display = 'none';
   $('#waiting').style.display = 'flex';
-  $('#roomCodeDisplay').textContent = S.roomCode;
-  $('#roomId').textContent = S.roomCode;
+  $('#roomCodeDisplay').textContent = formatRoomCode(S.roomCode);
+  $('#roomId').textContent = formatRoomCode(S.roomCode);
   initHost();
 };
 
@@ -280,30 +291,28 @@ $('#btnJoinShow').onclick = () => {
 };
 
 $('#btnJoin').onclick = () => {
-  const code = $('#joinCode').value.trim().toUpperCase();
+  const code = $('#joinCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
   if (!code) { toast('Введіть код кімнати'); return; }
   S.roomCode = code;
   S.isHost = false;
   $('#landing').style.display = 'none';
   $('#waiting').style.display = 'flex';
   $('#waitTitle').textContent = 'Приєднання...';
-  $('#roomCodeDisplay').textContent = code;
-  $('#roomId').textContent = code;
+  $('#roomCodeDisplay').textContent = formatRoomCode(code);
+  $('#roomId').textContent = formatRoomCode(code);
   initFollower();
 };
 
-// Copy room code
+// Copy room code (clean version without dashes for PeerJS)
 $('#roomCodeDisplay').onclick = () => {
   navigator.clipboard.writeText(S.roomCode).then(() => {
     toast('Код скопійовано!');
   }).catch(() => {
-    const range = document.createRange();
-    range.selectNodeContents($('#roomCodeDisplay'));
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    document.execCommand('copy');
-    window.getSelection().removeAllRanges();
-    toast('Код скопійовано!');
+    navigator.clipboard.writeText(S.roomCode).then(() => {
+      toast('Код скопійовано!');
+    }).catch(() => {
+      toast('Не вдалося скопіювати');
+    });
   });
 };
 
