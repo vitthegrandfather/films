@@ -143,7 +143,7 @@ input{font-family:inherit;outline:none;border:none}
     <div id="joinFields" class="hidden" style="margin-top:16px">
       <div class="field">
         <label>Код кімнати від друга</label>
-        <input id="joinCode" type="text" placeholder="Наприклад: HAPPYBLUE07" maxlength="20" style="text-transform:uppercase;font-family:monospace;letter-spacing:2px">
+        <input id="joinCode" type="text" placeholder="Наприклад: 123456" maxlength="10" style="font-family:monospace;letter-spacing:2px">
       </div>
       <button class="btn btn-primary" id="btnJoin">Приєднатися</button>
     </div>
@@ -227,25 +227,9 @@ const S = {
 const $ = s => document.querySelector(s);
 
 // ===== ROOM CODE GENERATION =====
-const ADJECTIVES = ['HAPPY','SUNNY','BRAVE','CALM','WARM','COOL','FAIR','BOLD','KEEN','WISE','GLAD','PURE','FADE','RUSH','ZEST','DUKE','FOXY','JADE','LUNA','NOVA','PEAK','REEF','TIDE','VEIL','WOLF'];
-const NOUNS = ['BLUE','TREE','STAR','WAVE','FIRE','GOLD','MOON','RAIN','SNOW','WIND','BIRD','FISH','LION','ROSE','SHIP','MOSS','HAZE','DUSK','FERN','CAVE','DAWN','GLEN','IRIS','LYNX','RUBY'];
-
 function generateRoomCode() {
-  const a = ADJECTIVES[Math.floor(Math.random() * ADJECTIVES.length)];
-  const n = NOUNS[Math.floor(Math.random() * NOUNS.length)];
-  const num = String(Math.floor(Math.random() * 100)).padStart(2, '0');
-  return a + n + num;
-}
-
-function formatRoomCode(code) {
-  // Format as WORD-WORD-00 for display
-  if (code.length >= 8) {
-    const w1 = code.slice(0, Math.floor(code.length / 2));
-    const w2 = code.slice(Math.floor(code.length / 2), code.length - 2);
-    const num = code.slice(-2);
-    return w1 + '-' + w2 + '-' + num;
-  }
-  return code;
+  // Simple 6-digit number - guaranteed PeerJS compatible
+  return String(Math.floor(100000 + Math.random() * 900000));
 }
 
 // ===== UTILITY =====
@@ -276,8 +260,8 @@ $('#btnCreate').onclick = () => {
   S.roomCode = generateRoomCode();
   $('#landing').style.display = 'none';
   $('#waiting').style.display = 'flex';
-  $('#roomCodeDisplay').textContent = formatRoomCode(S.roomCode);
-  $('#roomId').textContent = formatRoomCode(S.roomCode);
+  $('#roomCodeDisplay').textContent = S.roomCode;
+  $('#roomId').textContent = S.roomCode;
   initHost();
 };
 
@@ -291,28 +275,24 @@ $('#btnJoinShow').onclick = () => {
 };
 
 $('#btnJoin').onclick = () => {
-  const code = $('#joinCode').value.trim().toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (!code) { toast('Введіть код кімнати'); return; }
+  const code = $('#joinCode').value.trim().replace(/[^0-9]/g, '');
+  if (!code || code.length < 4) { toast('Введіть код кімнати'); return; }
   S.roomCode = code;
   S.isHost = false;
   $('#landing').style.display = 'none';
   $('#waiting').style.display = 'flex';
   $('#waitTitle').textContent = 'Приєднання...';
-  $('#roomCodeDisplay').textContent = formatRoomCode(code);
-  $('#roomId').textContent = formatRoomCode(code);
+  $('#roomCodeDisplay').textContent = code;
+  $('#roomId').textContent = code;
   initFollower();
 };
 
-// Copy room code (clean version without dashes for PeerJS)
+// Copy room code
 $('#roomCodeDisplay').onclick = () => {
   navigator.clipboard.writeText(S.roomCode).then(() => {
     toast('Код скопійовано!');
   }).catch(() => {
-    navigator.clipboard.writeText(S.roomCode).then(() => {
-      toast('Код скопійовано!');
-    }).catch(() => {
-      toast('Не вдалося скопіювати');
-    });
+    toast('Не вдалося скопіювати');
   });
 };
 
